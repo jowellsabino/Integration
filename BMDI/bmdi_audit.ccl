@@ -1,0 +1,77 @@
+;; BMDI
+ select ba.* 
+ from BMDI_ACQUIRED_RESULTS ba;;BMDI_ACQUIRED_DATA_TRACK
+ where ba.person_id =  25783056
+ and ba.acquired_dt_tm < sysdate
+ and ba.clinical_dt_tm < sysdate
+ and ba.verified_ind > 0
+ and ba.monitored_device_id =          878994131.00 
+ order by ba.acquired_dt_tm desc
+ with maxtime=300, format(date,";;q")
+ go
+ 
+ select DEVICE=uar_get_code_display(device_cd),
+ EVENT_CODE=uar_get_code_display(event_cd),
+ PARAMETER_ALIAS,
+ * from bmdi_device_parameter
+ where parameter_alias = 'ARTm'
+ ;;with maxrec=10
+ go
+ 
+ 
+ select  Patient=badt.person_id
+       , ba.acquired_dt_tm
+       , ba.verified_dt_tm
+       , ba.clinical_dt_tm
+       , Result=cvce.display
+       , ba.result_val
+       , Device_Class=cv.display
+       , Device_ALias = bmd.device_alias
+;       , Associated_by=associatedby.name_full_formatted
+;       , badt.association_dt_tm
+;       , DisAssociate_by=disassociatedby.name_full_formatted
+;       , badt.dis_association_dt_tm
+;;       , ba.*
+;;       , badt.*
+;;       , bmd.*
+ from bmdi_acquired_results ba
+ , (inner join bmdi_acquired_data_track
+               badt
+            on badt.person_id = ba.person_id)
+ , (inner join code_value
+               cv
+            on cv.code_value = badt.device_cd
+           and cv.code_set = 221)
+ , (inner join bmdi_monitored_device
+               bmd
+            on bmd.monitored_device_id =  badt.monitored_device_id)
+ ;, (inner join prsnl
+ ;              associatedby
+ ;           on associatedby.person_id = badt.assoc_prsnl_id)
+ ;, (inner join prsnl
+ ;              disassociatedby
+ ;           on disassociatedby.person_id = badt.dissoc_prsnl_id)
+ , (inner join clinical_event
+               ce
+            on ce.event_id = ba.event_id)
+ , (inner join code_value
+               cvce
+            on cvce.code_value = ce.event_cd
+           and cvce.code_set = 72)
+ where ba.person_id =  25783056	 ;;8492067
+ and ba.acquired_dt_tm < sysdate
+ and ba.clinical_dt_tm < sysdate
+ and ba.verified_ind > 0
+ order by ba.acquired_dt_tm desc
+with maxtime=300,format(date,";;q")
+go
+;; Only for last 12 hours?
+ 
+ 
+ select * from BMDI_ADT_PERSON_R
+ where encntr_id =  76844617 ;;person_id =  25679027
+ with maxtime=300,maxrec=100 go
+ 
+ ;; BMDI_ADT_PERSON_R
+ 
+ select * from clinical_event where event_id =  4508488325.00 go
