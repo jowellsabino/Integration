@@ -1,0 +1,168 @@
+/* Email address exist for these providers? */
+select * from address a
+where a.parent_entity_id in (12436525, 5274303, 5281569) ;;(8531805.00,15879359.00,13294200,6915807)
+and a.address_type_cd = 755.00 ;; email code, I'm lazy
+go
+ 
+ 
+/* Pools a prsnl belongs to (BUT IT DOES NOT MATTER for rad notifications
+                           - only location pools matter, Farhad.  Note UPDT_DT_TM) */
+select pr.name_full_formatted
+     , pg.prsnl_group_name
+     , pg.prsnl_group_id
+     , Updated_By=prup.name_full_formatted
+     , pgr.updt_dt_tm
+from prsnl_group_reltn pgr
+, (inner join prsnl pr on pr.person_id = pgr.person_id)
+, (inner join prsnl prup on prup.person_id = pgr.updt_id)
+, (inner join prsnl_group pg on pg.prsnl_group_id = pgr.prsnl_group_id)
+          ;; and pg.prsnl_group_id =    11302228.00) ;;DEBUG - Jonathan Hron (Hospitalist pool)
+where pgr.active_ind = 1
+and pgr.person_id in (12436525, 5274303, 5281569, 11007132)  ;; affected providers
+order by pr.name_full_formatted asc
+go
+ 
+/* Answer questions asked by the CCL service for orders placed by these providers last 30 days */
+select Orderd_by=pr.name_full_formatted
+     , CSN=ea.alias
+     , Encounter_Location=uar_get_code_display(e.location_cd)
+     , Encounter_Class=uar_get_code_display(e.encntr_class_cd)
+     , Encounter_Type=uar_get_code_display(e.encntr_type_cd)
+     , DTF_Location_Pool=uar_get_code_display(dtfl.location_cd) /* If empty, no DTF pool for location */
+     , o.order_id
+     , o.orig_order_dt_tm
+     , o.encntr_id
+     , o.originating_encntr_id
+     , Original_Ordering_Location=uar_get_code_display(od.oe_field_value)
+     , o.order_mnemonic
+     , o.clinical_display_line
+     , o.updt_task
+from orders o
+   , (inner join order_detail od on od.order_id = o.order_id)
+   , (inner join code_value cvdtf on cvdtf.code_value = od.oe_field_id
+             and cvdtf.display_key = 'LOCATIONDIAGNOSTICFOLLOWUP')
+   , (inner join order_action oa on oa.order_id = o.order_id
+            and oa.action_type_cd = 2534.00 /* new order, I'm lazy */
+            and oa.order_provider_id in (12436525, 5274303, 5281569))
+              ;;BURGHARDT MD, LINDSEY C
+              ;; FELDMAN MD, MITCHELL J
+              ;; PAUL MD, SCOTT R
+   , (inner join prsnl pr on pr.person_id = oa.order_provider_id)
+   , (inner join encounter e on e.encntr_id = o.encntr_id)
+   , (inner join encntr_alias ea
+              on ea.encntr_id = e.encntr_id
+             and ea.active_ind = 1
+             and ea.end_effective_dt_tm > sysdate)
+   , (inner join code_value cveat
+              on cveat.code_value = ea.encntr_alias_type_cd
+             and cveat.cdf_meaning = 'FIN NBR' ;; 1077
+             and cveat.code_set = 319
+             and cveat.active_ind = 1)
+   , (left join chb_dtf_location dtfl on dtfl.location_cd = e.location_cd)
+ 
+;;where o.encntr_id in ( 75957192 ,76053593) ;; these worked because order placed as non-future order, so encounter has a location
+where o.orig_order_dt_tm > sysdate - 30
+  and o.catalog_type_cd = (select code_value from code_value cv where cv.display = 'Radiology')
+order by pr.name_full_formatted,CSN,o.orig_order_dt_tm desc
+with maxrec=300,maxtime=100
+go
+ 
+ 
+/* Call the service, but do from backend */
+free record ws_req_dtf_get_suppress_loc go
+record ws_req_dtf_get_suppress_loc(
+    1 batch_id      = f8
+        1 orders[*]                 ;List of orders to check
+             2 order_id = f8        ;The order id from the interface
+) go
+ 
+set ws_req_dtf_get_suppress_loc->batch_id = 0.0
+set stat = alterlist(ws_req_dtf_get_suppress_loc->orders,1) go
+set ws_req_dtf_get_suppress_loc->orders[1].order_id = 2476308381.00 go
+ 
+execute chb_ws_dtf_get_suppress_loc
+ /* Second parameter 0 (JSON) */
+ /* Pass as third parameter: ^{"WS_REQ_DTF_GET_SUPPRESS_LOC":{"BATCH_ID":0.0000,"ORDERS":[ { "ORDER_ID":2476308381.00]}}^ */
+ 
+free record ws_req_dtf_get_suppress_loc
+ 
+ 
+/* Query the logging table used by discern */
+ 
+select * from chb_msg_log
+where source_txt = 'chb_ws_dtf_get_suppress_loc'
+go
+/*
+ 2476308381.00
+ 2458879449.00
+ 2458893907.00
+ 2468991369.00
+ 2469018519.00
+ 2441293523.00
+ 2443704561.00
+ 2445142173.00
+ 2447725081.00
+ 2447895189.00
+ 2447874347.00
+ 2448576007.00
+ 2449147443.00
+ 2449099399.00
+ 2449176633.00
+ 2453740713.00
+ 2458762383.00
+ 2466182187.00
+ 2467307089.00
+ 2467741027.00
+ 2467687189.00
+ 2468520229.00
+ 2469321931.00
+ 2470869839.00
+ 2470945559.00
+ 2474857831.00
+ 2475290037.00
+ 2445713097.00
+ 2445705647.00
+ 2448420881.00
+ 2448444499.00
+ 2455846239.00
+ 2444190233.00
+ 2444190233.00
+ 2453836979.00
+ 2453881591.00
+ 2467272893.00
+ 2467295215.00
+*/
+ 
+ 
+ 
+ 
+ 
+ 
+/* Check if locations of the order associated with a DTF pool */
+select * from chb_dtf_pool dtfp
+where dtfp.prsnl_group_id in (
+      835898.00
+     ,835900.00
+     ,835896.00
+     ,835918.00
+     ,835941.00
+)
+with maxrec=100
+go
+ 
+select * from orders where order_id = 2458879449 go
+ 
+select * from encntr_alias where encntr_id = 77046181.00 go
+ 
+select * from chb_dtf_pool dtfp
+where dtfp.pool_name = 'Private Location/Results' ;; prsnl_group_id =    16325698.00
+go
+ 
+select * from prsnl_group pgr
+where pgr.prsnl_group_id = 16325698.00
+go
+ 
+select uar_get_code_display(dtfl.location_cd),dtfl.*
+from chb_dtf_location dtfl
+where dtfl.prsnl_group_id = 16325698.00
+go
