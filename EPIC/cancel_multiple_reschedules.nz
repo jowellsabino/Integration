@@ -4,17 +4,16 @@
 create temp table epic_cancel_resched as (
 	select orig_enc.pat_enc_csn_id as Original_CSN
 		 , count(*) as Reschedule_Count 
-  	  from ads_epic_stage.admin.temp_chb_pat_enc_0524 orig_enc /* change this to whatever contains the original_csn */
-      join ads_epic_stage.admin.temp_chb_pat_enc_0524 epic_resched on epic_resched.original_csn_id = orig_enc.pat_enc_csn_id
+  	  from ads_epic_stage.admin.chb_pat_enc orig_enc /* change this to whatever contains the original_csn */
+      join ads_epic_stage.admin.chb_pat_enc epic_resched on epic_resched.original_csn = orig_enc.pat_enc_csn_id
 	  join ads_epic_stage.admin.pat_enc epic_enc on epic_enc.pat_enc_csn_id = epic_resched.pat_enc_csn_id
        and epic_enc.appt_status_c != 3 /* 3 = Cancelled appointment.  If the appt is cancelled and rescheduled again, do not count the reschedule */
- 	 where orig_enc.original_csn_id is NULL
+ 	 where orig_enc.original_csn is NULL
 	 -- DEBUG: and orig_enc.pat_enc_csn_id = 6120110981 -- 6122725042
+	 
   group by orig_enc.pat_enc_csn_id
-  having count(*) > 1
+  --having count(*) > 1
 );
-
---select * from epic_cancel_resched;
 
 select epic_pt.PAT_NAME as Patient_Name
      , epic_pt.PAT_MRN_ID as MRN
@@ -26,16 +25,16 @@ select epic_pt.PAT_NAME as Patient_Name
 	 , epic_empl.name as Rescheduled_by
 	 , epic_serv.prov_name as Attnding_Provider
   from ads_epic_stage.admin.PAT_ENC epic_enc
-  join patient epic_pt on epic_pt.pat_id = epic_enc.pat_id
-  join clarity_dep epic_dept on epic_dept.department_id = epic_enc.department_id
-  join clarity_emp epic_empl on epic_empl.user_id  = epic_enc.APPT_ENTRY_USER_ID
-  join clarity_ser epic_serv on epic_serv.prov_id = epic_enc.ATTND_PROV_ID
+  join ads_epic_stage.admin.patient epic_pt on epic_pt.pat_id = epic_enc.pat_id
+  join ads_epic_stage.admin.clarity_dep epic_dept on epic_dept.department_id = epic_enc.department_id
+  join ads_epic_stage.admin.clarity_emp epic_empl on epic_empl.user_id  = epic_enc.APPT_ENTRY_USER_ID
+  join ads_epic_stage.admin.clarity_ser epic_serv on epic_serv.prov_id = epic_enc.ATTND_PROV_ID
   /* Join on problematic cancel-rescheduled encounters */
-  join ads_epic_stage.admin.temp_chb_pat_enc_0524 epic_prob on epic_prob.pat_enc_csn_id = epic_enc.pat_enc_csn_id
-  join epic_cancel_resched epic_resched on epic_resched.original_CSN = epic_prob.original_csn_id
-   --and epic_resched.original_csn = 6122725042
-where epic_enc.appt_time > now() - 30  /* We look back 30 days, to allow billing charges to go through */
-  and epic_enc.APPT_MADE_DATE < to_date('08-May-2018 06:30:00','DD-Mon-YYYY HH24:MI:SS') /* Date of the FIX */*/
+  join ads_epic_stage.admin.chb_pat_enc epic_prob on epic_prob.pat_enc_csn_id = epic_enc.pat_enc_csn_id
+  join epic_cancel_resched epic_resched on epic_resched.original_csn = epic_prob.original_csn
+  -- DEBUG: and epic_resched.original_csn = 6122493910
+where epic_enc.appt_time > now() - 60  /* We look back 30 days, to allow billing charges to go through */
+  and epic_enc.APPT_MADE_DATE < to_date('08-May-2018 06:30:00','DD-Mon-YYYY HH24:MI:SS') /* Date of the FIX */
   and epic_enc.APPT_STATUS_C != 3 /* Filter already cancelled encounter, since NO EPIC activity will be possible */
 -- DEBUG: and  epic_dept.DEPARTMENT_NAME  = 'DEVELOPMENTAL MED CTR'
 -- DEBUG: and epic_serv.PROV_NAME like 'RAPPAPORT%'
