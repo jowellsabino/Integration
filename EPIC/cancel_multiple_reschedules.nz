@@ -22,7 +22,9 @@ select epic_pt.PAT_NAME as Patient_Name
 	 , case when epic_enc.appt_status_c = 1 then 'Pending'
 	        when epic_enc.appt_status_c = 2 then 'Complete'
 	        when epic_enc.appt_status_c = 3 then 'Cancelled' 
-			when epic_enc.appt_status_c = 3 then 'No Show' 
+			when epic_enc.appt_status_c = 4 then 'No Show' 
+			when epic_enc.appt_status_c = 5 then 'Left'
+			when epic_enc.appt_status_c = 6 then 'Arrived'
 			else 'Unknown'
 	   end as appointment_status
 	 , epic_enc.appt_status_c
@@ -46,6 +48,6 @@ where epic_enc.appt_time > now() - 120  /* We look back 30 days, to allow billin
   and epic_enc.APPT_MADE_DATE between to_date('01-Nov-2017 06:30:00','DD-Mon-YYYY HH24:MI:SS') /* Date of the FIX */
                                   and to_date('08-May-2018 06:30:00','DD-Mon-YYYY HH24:MI:SS')
 
---   and epic_enc.APPT_STATUS_C != 3 /* Filter already cancelled encounter, since NO EPIC activity will be possible */
+  --- and epic_enc.APPT_STATUS_C > 6 /* Filter already cancelled encounter, since NO EPIC activity will be possible */
 order by epic_pt.PAT_NAME,  epic_resched.Original_CSN asc, epic_enc.update_date desc
 ;
