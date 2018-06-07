@@ -47,5 +47,5 @@ where epic_enc.appt_time > now() - 120  /* We look back 30 days, to allow billin
                                   and to_date('08-May-2018 06:30:00','DD-Mon-YYYY HH24:MI:SS')
 
 --   and epic_enc.APPT_STATUS_C != 3 /* Filter already cancelled encounter, since NO EPIC activity will be possible */
-order by epic_pt.PAT_NAME, epic_enc.update_date desc, epic_resched.Original_CSN asc
+order by epic_pt.PAT_NAME,  epic_resched.Original_CSN asc, epic_enc.update_date desc
 ;
