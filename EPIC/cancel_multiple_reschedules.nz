@@ -1,20 +1,19 @@
-
 /* get all visits that was reschduled more than once from a cancelled-rescheduled visit */
 /* This captures miltiple reschedules, though */
 create temp table epic_cancel_resched as (
 	select orig_enc.pat_enc_csn_id as Original_CSN
 		 , count(*) as Reschedule_Count 
-  	  from ads_epic_stage.admin.chb_pat_enc orig_enc /* change this to whatever contains the original_csn */
+  	  from ads_epic_stage.admin.chb_pat_enc orig_enc 
       join ads_epic_stage.admin.chb_pat_enc epic_resched on epic_resched.original_csn = orig_enc.pat_enc_csn_id
 	  join ads_epic_stage.admin.pat_enc epic_enc on epic_enc.pat_enc_csn_id = epic_resched.pat_enc_csn_id
-	   and epic_enc.APPT_MADE_DATE between to_date('01-Nov-2017 06:30:00','DD-Mon-YYYY HH24:MI:SS') /* Date of the FIX */
-                                       and to_date('08-May-2018 06:30:00','DD-Mon-YYYY HH24:MI:SS')
+	   and epic_enc.APPT_MADE_DATE  < to_date('08-May-2018 06:30:00','DD-Mon-YYYY HH24:MI:SS')  /* Date of the FIX */
        -- and epic_enc.appt_status_c != 3 /* 3 = Cancelled appointment.  If the appt is cancelled and rescheduled again, do not count the reschedule */
  	 where orig_enc.original_csn is NULL
   group by orig_enc.pat_enc_csn_id
   having count(*) > 1 
 );
 
+create temp table epic_problematic as (
 select epic_pt.PAT_NAME as Patient_Name
      , epic_pt.PAT_MRN_ID as MRN
 	 , epic_resched.Original_CSN
@@ -43,11 +42,16 @@ select epic_pt.PAT_NAME as Patient_Name
   join ads_epic_stage.admin.chb_pat_enc epic_prob on epic_prob.pat_enc_csn_id = epic_enc.pat_enc_csn_id
   join epic_cancel_resched epic_resched on epic_resched.original_csn = epic_prob.original_csn
    -- DEBUG: and epic_resched.original_csn = 6122493910
-where epic_enc.appt_time > now() - 120  /* We look back 30 days, to allow billing charges to go through */
-  and epic_enc.update_date > now() - 120
-  and epic_enc.APPT_MADE_DATE between to_date('01-Nov-2017 06:30:00','DD-Mon-YYYY HH24:MI:SS') /* Date of the FIX */
-                                  and to_date('08-May-2018 06:30:00','DD-Mon-YYYY HH24:MI:SS')
+where epic_enc.APPT_MADE_DATE < to_date('08-May-2018 06:30:00','DD-Mon-YYYY HH24:MI:SS')/* Date of the FIX */
+ -- and epic_enc.appt_time > now() - 120  /* We look back 30 days, to allow billing charges to go through */
+ -- and epic_enc.update_date > now() - 120
+ -- and epic_enc.APPT_STATUS_C > 6 /* Filter already cancelled encounter, since NO EPIC activity will be possible */
+);
 
-  --- and epic_enc.APPT_STATUS_C > 6 /* Filter already cancelled encounter, since NO EPIC activity will be possible */
-order by epic_pt.PAT_NAME,  epic_resched.Original_CSN asc, epic_enc.update_date desc
+
+select  ep1.* 
+from epic_problematic ep1
+join epic_problematic ep2 on ep2.original_csn = ep1.original_csn
+  and ep2.appt_status_c = 1 /* We are only interested in encounters that still has a pending encounter */
+order by ep1.patient_name,  ep1.Original_CSN asc, ep1.update_date desc
 ;
