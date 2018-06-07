@@ -7,18 +7,26 @@ create temp table epic_cancel_resched as (
   	  from ads_epic_stage.admin.chb_pat_enc orig_enc /* change this to whatever contains the original_csn */
       join ads_epic_stage.admin.chb_pat_enc epic_resched on epic_resched.original_csn = orig_enc.pat_enc_csn_id
 	  join ads_epic_stage.admin.pat_enc epic_enc on epic_enc.pat_enc_csn_id = epic_resched.pat_enc_csn_id
-       and epic_enc.appt_status_c != 3 /* 3 = Cancelled appointment.  If the appt is cancelled and rescheduled again, do not count the reschedule */
+	   and epic_enc.APPT_MADE_DATE between to_date('01-Nov-2017 06:30:00','DD-Mon-YYYY HH24:MI:SS') /* Date of the FIX */
+                                       and to_date('08-May-2018 06:30:00','DD-Mon-YYYY HH24:MI:SS')
+       -- and epic_enc.appt_status_c != 3 /* 3 = Cancelled appointment.  If the appt is cancelled and rescheduled again, do not count the reschedule */
  	 where orig_enc.original_csn is NULL
-	 -- DEBUG: and orig_enc.pat_enc_csn_id = 6120110981 -- 6122725042
-	 
   group by orig_enc.pat_enc_csn_id
-  --having count(*) > 1
+  having count(*) > 1 
 );
 
 select epic_pt.PAT_NAME as Patient_Name
      , epic_pt.PAT_MRN_ID as MRN
 	 , epic_resched.Original_CSN
      , epic_enc.PAT_ENC_CSN_ID as rescheuled_csn
+	 , case when epic_enc.appt_status_c = 1 then 'Pending'
+	        when epic_enc.appt_status_c = 2 then 'Complete'
+	        when epic_enc.appt_status_c = 3 then 'Cancelled' 
+			when epic_enc.appt_status_c = 3 then 'No Show' 
+			else 'Unknown'
+	   end as appointment_status
+	 , epic_enc.appt_status_c
+	 , epic_enc.update_date
 	 , epic_enc.appt_time as DOS
 	 , epic_enc.APPT_MADE_DATE as Appt_Create_Date
 	 , epic_dept.DEPARTMENT_NAME as Clinic_Name
@@ -32,12 +40,12 @@ select epic_pt.PAT_NAME as Patient_Name
   /* Join on problematic cancel-rescheduled encounters */
   join ads_epic_stage.admin.chb_pat_enc epic_prob on epic_prob.pat_enc_csn_id = epic_enc.pat_enc_csn_id
   join epic_cancel_resched epic_resched on epic_resched.original_csn = epic_prob.original_csn
-  -- DEBUG: and epic_resched.original_csn = 6122493910
-where epic_enc.appt_time > now() - 60  /* We look back 30 days, to allow billing charges to go through */
-  and epic_enc.APPT_MADE_DATE < to_date('08-May-2018 06:30:00','DD-Mon-YYYY HH24:MI:SS') /* Date of the FIX */
-  and epic_enc.APPT_STATUS_C != 3 /* Filter already cancelled encounter, since NO EPIC activity will be possible */
--- DEBUG: and  epic_dept.DEPARTMENT_NAME  = 'DEVELOPMENTAL MED CTR'
--- DEBUG: and epic_serv.PROV_NAME like 'RAPPAPORT%'
--- NOFILTER: '2319990''2319990''2319990' and  epic_enc.appt_status_c in (1) /* EPIC bug affects previously encounters, too.  So we remove this filter */
-order by epic_pt.PAT_NAME, epic_resched.Original_CSN asc
+   -- DEBUG: and epic_resched.original_csn = 6122493910
+where epic_enc.appt_time > now() - 120  /* We look back 30 days, to allow billing charges to go through */
+  and epic_enc.update_date > now() - 120
+  and epic_enc.APPT_MADE_DATE between to_date('01-Nov-2017 06:30:00','DD-Mon-YYYY HH24:MI:SS') /* Date of the FIX */
+                                  and to_date('08-May-2018 06:30:00','DD-Mon-YYYY HH24:MI:SS')
+
+--   and epic_enc.APPT_STATUS_C != 3 /* Filter already cancelled encounter, since NO EPIC activity will be possible */
+order by epic_pt.PAT_NAME, epic_enc.update_date desc, epic_resched.Original_CSN asc
 ;
