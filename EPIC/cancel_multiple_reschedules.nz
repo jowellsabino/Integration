@@ -26,8 +26,6 @@ select epic_pt.PAT_NAME as Patient_Name
 			when epic_enc.appt_status_c = 6 then 'Arrived'
 			else 'Unknown'
 	   end as appointment_status
-	 , epic_enc.appt_status_c
-	 , epic_enc.update_date
 	 , epic_enc.appt_time as DOS
 	 , epic_enc.APPT_MADE_DATE as Appt_Create_Date
 	 , epic_dept.DEPARTMENT_NAME as Clinic_Name
@@ -49,9 +47,26 @@ where epic_enc.APPT_MADE_DATE < to_date('08-May-2018 06:30:00','DD-Mon-YYYY HH24
 );
 
 
-select  ep1.* 
+create temp table epic_pending as (
+select  distinct ep1.* 
 from epic_problematic ep1
 join epic_problematic ep2 on ep2.original_csn = ep1.original_csn
-  and ep2.appt_status_c = 1 /* We are only interested in encounters that still has a pending encounter */
-order by ep1.patient_name,  ep1.Original_CSN asc, ep1.update_date desc
+  and ep2.appointment_status = 'Pending' /* We are only interested in encounters that still has a pending encounter */
+order by ep1.patient_name,  ep1.Original_CSN asc, ep1.DOS
+);
+
+create temp table epic_fix as (
+select patient_name,original_csn,count(*)
+from epic_pending
+where appointment_status = 'Pending'
+group by patient_name, original_csn
+having count(*) > 1
+);
+
+select epp.*
+from epic_pending epp
+join epic_fix ef on ef.original_csn = epp.original_csn
+where epp.appointment_status = 'Pending'
 ;
+
+
